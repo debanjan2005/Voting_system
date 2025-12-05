@@ -55,12 +55,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST['email'])) {
         if ($result && mysqli_affected_rows($conn) > 0) {
             // Redirect to login with email pre-filled
             echo "<script>
-                alert('✅ Password updated successfully! Please login with your new password.');
+                alert('Password updated successfully! Please login with your new password.');
                 window.location.href = 'login_form.php?email=" . urlencode($post_email) . "';
             </script>";
             exit();
         } else {
-            $error = "⚠️ Failed to update password. Please try again.";
+            $error = "Failed to update password. Please try again.";
         }
     }
     $email = $post_email; // Keep email in form
