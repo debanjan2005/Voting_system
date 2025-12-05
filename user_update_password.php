@@ -1,38 +1,69 @@
 <?php
 session_start();
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
-
 include("db_conn.php");
 
 $message = "";
 $error = "";
+$email = "";
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
+// Check if email is passed via URL (forgot password flow)
+if (isset($_GET['email'])) {
+    $email = trim($_GET['email']);
+    
+    // Verify email exists in database
+    $check_sql = "SELECT * FROM users WHERE email = '" . mysqli_real_escape_string($conn, $email) . "'";
+    $check_result = mysqli_query($conn, $check_sql);
+    
+    if (!$check_result || mysqli_num_rows($check_result) == 0) {
+        $error = "Email not found in our system.";
+        $email = "";
+    }
+} 
+// If no email in URL, check if user is logged in
+elseif (isset($_SESSION['user_id'])) {
+    // Get email from session user
+    $user_id = $_SESSION['user_id'];
+    $get_email_sql = "SELECT email FROM users WHERE id = '$user_id'";
+    $email_result = mysqli_query($conn, $get_email_sql);
+    if ($email_result && mysqli_num_rows($email_result) > 0) {
+        $row = mysqli_fetch_assoc($email_result);
+        $email = $row['email'];
+    }
+} 
+else {
+    // No email and not logged in - redirect to login
+    header("Location: login_form.php");
+    exit();
+}
+
+// Handle password update form submission
+if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST['email'])) {
     $new_password     = trim($_POST['new_password']);
     $confirm_password = trim($_POST['confirm_password']);
-    $user_id          = $_SESSION['user_id'];
+    $post_email       = trim($_POST['email']);
 
     if ($new_password !== $confirm_password) {
         $error = "New passwords do not match.";
+    } elseif (strlen($new_password) < 6) {
+        $error = "Password must be at least 6 characters.";
     } else {
+        // Update password using email
+        $update_sql = "UPDATE users SET password = '" . mysqli_real_escape_string($conn, $new_password) . "' 
+                       WHERE email = '" . mysqli_real_escape_string($conn, $post_email) . "'";
+        $result = mysqli_query($conn, $update_sql);
 
-        $sql = "UPDATE users SET password=$new_password WHERE id=$user_id";
-        $result = mysqli_query($conn,$sql);
-
-        if ($result) {
-            $message = "✅ Password updated successfully.";
-            // Optional: log user out after password change
-            // session_destroy();
-            // header("Location: login.php");
-            // exit();
+        if ($result && mysqli_affected_rows($conn) > 0) {
+            // Redirect to login with email pre-filled
+            echo "<script>
+                alert('✅ Password updated successfully! Please login with your new password.');
+                window.location.href = 'login_form.php?email=" . urlencode($post_email) . "';
+            </script>";
+            exit();
         } else {
-            $error = "⚠️ Something went wrong. Please try again.";
+            $error = "⚠️ Failed to update password. Please try again.";
         }
-
     }
+    $email = $post_email; // Keep email in form
 }
 ?>
 
@@ -51,18 +82,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <div class="bg-white p-6 rounded-lg shadow-lg w-[90%] max-w-md">
     <h1 class="text-2xl font-bold text-center text-blue-700 mb-4">Update Password</h1>
 
-    <?php if ($message): ?>
-      <p class="text-green-600 text-center mb-3"><?php echo $message; ?></p>
-    <?php elseif ($error): ?>
-      <p class="text-red-600 text-center mb-3"><?php echo $error; ?></p>
+    <?php if ($error): ?>
+      <p class="text-red-600 text-center mb-3 bg-red-50 p-2 rounded"><?php echo htmlspecialchars($error); ?></p>
     <?php endif; ?>
 
-    <form id="updateForm" method="post" action="#" class="space-y-4">
+    <?php if (!empty($email)): ?>
+    <form id="updateForm" method="post" action="" class="space-y-4">
       
+      <!-- Email (readonly) -->
+      <div>
+        <label class="block text-sm font-medium">Email</label>
+        <input type="email" name="email" value="<?php echo htmlspecialchars($email); ?>" 
+               class="w-full border rounded p-2 bg-gray-100" readonly>
+      </div>
+
       <!-- New Password -->
       <div>
         <label class="block text-sm font-medium">New Password</label>
-        <input type="password" name="new_password" class="w-full border rounded p-2" required>
+        <input type="password" name="new_password" id="new_password" class="w-full border rounded p-2" required>
       </div>
 
       <!-- Confirm Password -->
@@ -77,7 +114,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           Update Password
         </button>
       </div>
+
+      <p class="text-center text-sm mt-4">
+        <a href="login_form.php" class="text-blue-600 hover:underline">← Back to Login</a>
+      </p>
     </form>
+    <?php else: ?>
+      <p class="text-center text-gray-600 mb-4">Unable to process password reset.</p>
+      <div class="text-center">
+        <a href="login_form.php" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 inline-block">
+          Go to Login
+        </a>
+      </div>
+    <?php endif; ?>
   </div>
 
   <script>
@@ -85,7 +134,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $("#updateForm").validate({
         rules: {
           new_password: { required: true, minlength: 6 },
-          confirm_password: { required: true, equalTo: "[name='new_password']" }
+          confirm_password: { required: true, equalTo: "#new_password" }
         },
         messages: {
           new_password: {

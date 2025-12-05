@@ -1,26 +1,9 @@
 <?php
 session_start();
-include('db_conn.php');
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $email = trim($_POST['email']);
-
-    // Use prepared statement to prevent SQL injection
-    $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    if ($row = $result->fetch_assoc()) {
-        // Store user ID in session
-        $_SESSION['user_id'] = $row['id'];
-        $_SESSION['user_name'] = $row['name'];
-        header('location:dashboard.php');
-    }
-
-}
+// Get email from URL if present (from password reset)
+$prefill_email = isset($_GET['email']) ? htmlspecialchars($_GET['email']) : '';
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -57,11 +40,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <div class="bg-white p-6 rounded-lg shadow-lg w-[90%] max-w-md fade-in">
     <h1 class="text-2xl font-bold text-center text-blue-700 mb-4">Login</h1>
 
-    <form id="loginForm" class="space-y-4" action="#" method="post">
+    <form id="loginForm" class="space-y-4" action="login_check.php" method="post">
       <!-- Email -->
       <div>
         <label class="block text-sm font-medium">Email</label>
-        <input type="email" name="email" class="w-full border rounded p-2" placeholder="Enter your email">
+        <input type="email" name="email" id="email" class="w-full border rounded p-2" 
+               placeholder="Enter your email" value="<?php echo $prefill_email; ?>">
       </div>
 
       <!-- Password -->
@@ -76,7 +60,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <input type="checkbox" name="remember" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
           <span>Remember Me</span>
         </label>
-        <a href="user_update_password.php" class="text-blue-600 hover:underline">Forgot Password?</a>
+        <a href="#" id="forgotPasswordLink" class="text-blue-600 hover:underline">Forgot Password?</a>
       </div>
 
       <!-- Submit -->
@@ -117,6 +101,31 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             minlength: "Password must be at least 6 characters."
           }
         }
+      });
+
+      // Handle Forgot Password click
+      $("#forgotPasswordLink").click(function(e) {
+        e.preventDefault();
+        
+        var email = $("#email").val().trim();
+        
+        // Check if email is empty
+        if (email === "") {
+          alert("Please enter your email address first!");
+          $("#email").focus();
+          return false;
+        }
+        
+        // Check if email is valid format
+        var emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailPattern.test(email)) {
+          alert("Please enter a valid email address!");
+          $("#email").focus();
+          return false;
+        }
+        
+        // Redirect to forgot password page with email
+        window.location.href = "user_update_password.php?email=" + encodeURIComponent(email);
       });
     });
   </script>
