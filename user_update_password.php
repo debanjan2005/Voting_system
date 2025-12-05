@@ -10,25 +10,34 @@ $email = "";
 if (isset($_GET['email'])) {
     $email = trim($_GET['email']);
     
-    // Verify email exists in database
-    $check_sql = "SELECT * FROM users WHERE email = '" . mysqli_real_escape_string($conn, $email) . "'";
-    $check_result = mysqli_query($conn, $check_sql);
+    // Verify email exists in database - FIXED: Use prepared statement
+    $check_sql = "SELECT * FROM users WHERE email = ?";
+    $stmt = mysqli_prepare($conn, $check_sql);
+    mysqli_stmt_bind_param($stmt, "s", $email);
+    mysqli_stmt_execute($stmt);
+    $check_result = mysqli_stmt_get_result($stmt);
     
     if (!$check_result || mysqli_num_rows($check_result) == 0) {
         $error = "Email not found in our system.";
         $email = "";
     }
+    mysqli_stmt_close($stmt);
 } 
 // If no email in URL, check if user is logged in
 elseif (isset($_SESSION['user_id'])) {
-    // Get email from session user
+    // Get email from session user - FIXED: Use prepared statement
     $user_id = $_SESSION['user_id'];
-    $get_email_sql = "SELECT email FROM users WHERE id = '$user_id'";
-    $email_result = mysqli_query($conn, $get_email_sql);
+    $get_email_sql = "SELECT email FROM users WHERE id = ?";
+    $stmt = mysqli_prepare($conn, $get_email_sql);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $email_result = mysqli_stmt_get_result($stmt);
+    
     if ($email_result && mysqli_num_rows($email_result) > 0) {
         $row = mysqli_fetch_assoc($email_result);
         $email = $row['email'];
     }
+    mysqli_stmt_close($stmt);
 } 
 else {
     // No email and not logged in - redirect to login
@@ -47,12 +56,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST['email'])) {
     } elseif (strlen($new_password) < 6) {
         $error = "Password must be at least 6 characters.";
     } else {
-        // Update password using email
-        $update_sql = "UPDATE users SET password = '" . mysqli_real_escape_string($conn, $new_password) . "' 
-                       WHERE email = '" . mysqli_real_escape_string($conn, $post_email) . "'";
-        $result = mysqli_query($conn, $update_sql);
+        // FIXED: Update password using prepared statement
+        $update_sql = "UPDATE users SET password = ? WHERE email = ?";
+        $stmt = mysqli_prepare($conn, $update_sql);
+        mysqli_stmt_bind_param($stmt, "ss", $new_password, $post_email);
+        $result = mysqli_stmt_execute($stmt);
 
-        if ($result && mysqli_affected_rows($conn) > 0) {
+        if ($result && mysqli_stmt_affected_rows($stmt) > 0) {
+            mysqli_stmt_close($stmt);
+            // FIXED: Clear session if user is logged in (force re-login with new password)
+            if (isset($_SESSION['user_id'])) {
+                session_destroy();
+            }
             // Redirect to login with email pre-filled
             echo "<script>
                 alert('Password updated successfully! Please login with your new password.');
@@ -61,6 +76,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST['email'])) {
             exit();
         } else {
             $error = "Failed to update password. Please try again.";
+            mysqli_stmt_close($stmt);
         }
     }
     $email = $post_email; // Keep email in form
