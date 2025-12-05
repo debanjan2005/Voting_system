@@ -35,8 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['agent_id']) && !$alre
     $insert = "INSERT INTO vote (voter_id, agent_id, vote_date, vote_time) 
                VALUES ('$voter_id', '$agent_id', '$vote_date', '$vote_time')";
     if (mysqli_query($conn, $insert)) {
-        // $message = "✅ Your vote has been recorded!";
-        $alreadyVoted = true; // update status
+        // Vote successful - redirect to dashboard
+        $_SESSION['vote_success'] = true;
+        header("Location: dashboard.php");
+        exit;
     } else {
         $message = "❌ Error saving vote.";
     }
